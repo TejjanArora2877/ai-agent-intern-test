@@ -32,17 +32,62 @@ from src.agent.validator import DeterministicValidator
 from src.agent.tracer import AgentTracer
 
 
+def _is_active_order_followup(user_message: str, order_view: Optional[CustomerSafeOrderView]) -> bool:
+    """
+    Determine if a follow-up query is genuinely referring to the active order in session memory,
+    rather than a general policy, product, or adversarial question.
+    """
+    norm_query = user_message.lower()
+
+    # Exclude policy debates, prompt injections, and general policy questions
+    if re.search(r"\b(migration(\s+note)?|system\s+prompt|ignore\s+(the\s+)?(real\s+)?policy|override)\b", norm_query):
+        return False
+    if re.search(r"\b(what is the\b|how does a\b|do all\b|are all\b|can you ship to\b)", norm_query):
+        return False
+
+    # Check 1: Explicit order/package/shipment noun phrases
+    has_order_noun = bool(re.search(
+        r"\b(my order|the order|this order|that order|my package|the package|this package|that package|my shipment|the shipment|this item|the items?|my items?|these items|those items)\b",
+        norm_query
+    ))
+
+    # Check 2: Standalone pronouns (it, this, them, these) NOT followed by document/policy nouns
+    has_standalone_pronoun = False
+    for m in re.finditer(r"\b(it|this|them|these|those)\b(?:\s+([a-z]+))?", norm_query):
+        next_word = m.group(2)
+        if next_word in ["document", "policy", "note", "rule", "page", "file", "article", "guideline", "text", "information", "statement"]:
+            continue
+        has_standalone_pronoun = True
+        break
+
+    has_order_action = bool(re.search(
+        r"\b(return|track|tracking|arrive|arriving|deliver|delivered|delivery|status|where|when|cancel|refund|exchange|change|address|ship|shipped|get here)\b",
+        norm_query
+    ))
+
+    if (has_order_noun or has_standalone_pronoun) and has_order_action:
+        return True
+
+    # Check 3: Explicit query about order contents
+    if re.search(r"\b(what did i order|what items|items in (it|my order|the order)|what('s|\s+is) in (it|my order|the order))\b", norm_query):
+        return True
+
+    # Check 4: Mentions specific item name from the active session order
+    if order_view and order_view.items:
+        for item in order_view.items:
+            if item.name.lower() in norm_query:
+                if any(w in norm_query for w in ["return", "cancel", "refund", "exchange", "arrive", "where", "status", "change", "deliver", "shipped", "tracking"]):
+                    return True
+
+    return False
+
+
 class SupportAgent:
     """
     Main Aster & Row Customer Support Agent.
     
-    Orchestrates:
-    - Multi-turn context preservation.
-    - Unified context (RAG + Order Tool execution).
-    - Data-layer privacy and status precedence invariants.
-    - Generic conflict detection across active official documents.
-    - Live LLM structured generation or offline deterministic mock engine.
-    - Deterministic post-generation safety, citation, and handoff validation.
+    Coordinates retrieval-augmented generation (RAG), customer-safe order lookups,
+    prompt injection defense, and deterministic post-generation validation.
     """
 
     def __init__(
@@ -85,12 +130,6 @@ class SupportAgent:
             re.IGNORECASE
         )
         is_explicit_missing_inquiry = bool(explicit_missing_order_pattern.search(user_message))
-        is_order_intent = any(kw in norm_query for kw in [
-            "order", "return", "item", "track", "package", "deliver",
-            "arrive", "shipped", "status", "cancel", "exchange", "refund",
-            "address", "where is", "when will"
-        ])
-        is_order_inquiry = bool(current_order_id or (session_order_id and is_order_intent) or is_explicit_missing_inquiry)
 
         # Order Tool Execution
         tool_calls: List[ToolCallRecord] = []
@@ -106,42 +145,53 @@ class SupportAgent:
                     result=order_view.model_dump(),
                 )
             )
-        elif session_order_id and is_order_intent:
-            # Follow-up referencing active order in session using generic intent
-            order_view = self.order_tool.lookup(session_order_id)
-            tool_calls.append(
-                ToolCallRecord(
-                    tool_name="order_lookup",
-                    arguments={"order_id": session_order_id},
-                    result=order_view.model_dump(),
+        elif session_order_id:
+            # Check if this follow-up genuinely refers to the active order or its items
+            tentative_view = self.order_tool.lookup(session_order_id)
+            if _is_active_order_followup(user_message, tentative_view):
+                order_view = tentative_view
+                tool_calls.append(
+                    ToolCallRecord(
+                        tool_name="order_lookup",
+                        arguments={"order_id": session_order_id},
+                        result=order_view.model_dump(),
+                    )
                 )
-            )
         elif is_explicit_missing_inquiry and not session_order_id:
             order_missing = True
 
         # 3. Formulate RAG query and retrieve active official passages
+        is_anaphoric = bool(re.search(r"\b(it|this|that|these|those|what about|how about|and to|and in)\b", norm_query))
         enriched_query = user_message
-        if history:
+        if history and is_anaphoric:
             user_past_msgs = [m.content for m in history if m.role == "user"]
             if user_past_msgs:
                 enriched_query = f"{' '.join(user_past_msgs)} {user_message}"
 
-        # If order was looked up, also enrich query with item attributes
-        if order_view and order_view.items:
+        is_pure_tracking = bool(
+            order_view and 
+            re.search(r"\b(where\s+is|track|status\s+of|when\s+will|has\s+it\s+arrived|package\s+location)\b", norm_query) and 
+            not re.search(r"\b(return|policy|warranty|cancel|exchange|refund|price|damage|defect|fee|international)\b", norm_query)
+        )
+
+        if order_view and order_view.items and not is_pure_tracking:
             item_details = " ".join(f"{item.name} {'final sale' if item.final_sale else ''}" for item in order_view.items)
             enriched_query = f"{enriched_query} {item_details} {order_view.membership_tier or ''}"
 
-        retrieved_chunks = self.retriever.retrieve(enriched_query, top_k=settings.max_retrieved_chunks)
+        if is_pure_tracking:
+            retrieved_chunks = []
+        else:
+            retrieved_chunks = self.retriever.retrieve(enriched_query, top_k=settings.max_retrieved_chunks)
 
         # Generic Conflict Detection across retrieved active official documents
         is_conflict, conflict_chunks, conflict_text = ConflictDetector.detect_conflict(retrieved_chunks, user_message)
 
-        # 4. Generate Response (Live LLM or Offline Deterministic Engine)
+        # 4. Generate Response (Live Gemini LLM or Offline Deterministic Engine)
         if settings.is_live_llm_enabled and not self.force_mock_mode:
             raw_res, response = self._generate_live_llm(
                 user_message, history, retrieved_chunks, order_view, order_missing
             )
-            model_mode = "live_llm"
+            model_mode = f"gemini:{settings.gemini_model}"
         else:
             raw_res, response = self._generate_offline_mock(
                 user_message, history, retrieved_chunks, order_view, order_missing,
@@ -158,16 +208,20 @@ class SupportAgent:
             user_query=user_message,
             order_view=order_view,
             retrieved_chunks=retrieved_chunks,
+            is_conflict=is_conflict,
         )
 
         latency = (time.time() - start_time) * 1000.0
+
+        is_order_inquiry = bool(current_order_id or order_view or order_missing)
+        active_order_id = current_order_id or (session_order_id if order_view else None)
 
         # 6. Record Observability Trace
         trace = AgentTracer.create_trace(
             user_message=user_message,
             conversation_history=list(history),
             order_query_detected=is_order_inquiry,
-            order_id_extracted=current_order_id or session_order_id,
+            order_id_extracted=active_order_id,
             order_tool_result=order_view.model_dump() if order_view else None,
             retrieved_chunks=[c.model_dump() for c in retrieved_chunks],
             conflict_detected=is_conflict,
@@ -191,7 +245,7 @@ class SupportAgent:
         order_view: Optional[CustomerSafeOrderView],
         order_missing: bool,
     ) -> Tuple[str, AgentResponse]:
-        """Call live OpenAI-compatible LLM endpoint."""
+        """Call Google Gemini native generateContent REST endpoint."""
         prompt = build_agent_prompt(
             user_query=user_message,
             conversation_history=history,
@@ -200,30 +254,59 @@ class SupportAgent:
             order_missing=order_missing,
         )
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ]
+        payload = {
+            "system_instruction": {
+                "parts": [
+                    {"text": SYSTEM_PROMPT}
+                ]
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+            },
+        }
+
+        base_url = settings.gemini_base_url.rstrip("/")
+        if base_url.endswith("/openai"):
+            base_url = base_url[:-7].rstrip("/")
+        endpoint_url = f"{base_url}/models/{settings.gemini_model}:generateContent"
 
         try:
             with httpx.Client(timeout=30.0) as client:
                 res = client.post(
-                    f"{settings.openai_base_url.rstrip('/')}/chat/completions",
+                    endpoint_url,
+                    params={"key": settings.gemini_api_key},
                     headers={
-                        "Authorization": f"Bearer {settings.openai_api_key}",
                         "Content-Type": "application/json",
+                        "x-goog-api-key": settings.gemini_api_key,
                     },
-                    json={
-                        "model": settings.model_name,
-                        "messages": messages,
-                        "temperature": 0.0,
-                        "response_format": {"type": "json_object"},
-                    },
+                    json=payload,
                 )
                 res.raise_for_status()
                 data = res.json()
-                raw_content = data["choices"][0]["message"]["content"]
-                parsed = json.loads(raw_content)
+
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    raise ValueError(f"Gemini API returned no candidates: {data}")
+
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts:
+                    raise ValueError(f"Gemini candidate has no content parts: {candidates[0]}")
+
+                raw_content = parts[0].get("text", "")
+                cleaned_content = raw_content.strip()
+                if cleaned_content.startswith("```"):
+                    cleaned_content = re.sub(r"^```(?:json)?\s*", "", cleaned_content)
+                    cleaned_content = re.sub(r"\s*```$", "", cleaned_content)
+
+                parsed = json.loads(cleaned_content)
 
                 sources = []
                 for s in parsed.get("sources", []):
@@ -244,7 +327,7 @@ class SupportAgent:
             raw_mock, mock_resp = self._generate_offline_mock(
                 user_message, history, retrieved_chunks, order_view, order_missing
             )
-            mock_resp.answer = f"(Live LLM unavailable: {e}) {mock_resp.answer}"
+            mock_resp.answer = f"(Live Gemini LLM unavailable: {e}) {mock_resp.answer}"
             return str(e), mock_resp
 
     def _generate_offline_mock(

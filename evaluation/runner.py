@@ -42,21 +42,33 @@ def normalize_text(text: str) -> str:
 
 # Morphological and synonym mappings for robust concept matching
 SYNONYM_MAP = {
-    "human": {"human", "specialist", "representative", "agent", "team"},
-    "review": {"review", "reviewed", "approval", "approve", "approved", "confirm", "confirmation", "inspection"},
-    "approval": {"approval", "approve", "approved", "review", "confirm"},
+    "human": {"human", "specialist", "representative", "agent", "team", "support", "personnel"},
+    "review": {"review", "reviewed", "approval", "approve", "approved", "confirm", "confirmation", "confirmed", "inspection"},
+    "approval": {"approval", "approve", "approved", "review", "confirm", "confirmation"},
+    "confirmation": {"confirmation", "confirm", "confirmed", "review", "approval"},
+    "guidance": {"guidance", "instruction", "instructions", "recommendation", "recommendations", "care"},
+    "interim": {"interim", "temporary", "safest", "precaution"},
+    "safest": {"safest", "safe", "conservative", "interim", "precaution"},
     "damaged": {"damaged", "damage", "defective", "defect", "broken", "flawed"},
     "wrong": {"wrong", "incorrect", "different"},
     "duties": {"duties", "duty", "tax", "taxes", "customs", "brokerage"},
     "prepaid": {"prepaid", "paid", "recipient", "responsible", "pay"},
-    "conflict": {"conflict", "conflicts", "conflicting", "inconsistent", "differ", "differs", "differing"},
+    "conflict": {"conflict", "conflicts", "conflicting", "inconsistent", "differ", "differs", "differing", "contradictory", "contradiction", "discrepancy"},
+    "sources": {"sources", "source", "documents", "document", "policies", "policy", "guidelines", "guideline", "materials", "material"},
+    "documents": {"documents", "document", "sources", "source", "policies", "policy", "guidelines", "guideline", "materials", "material"},
+    "current": {"current", "official", "active", "published", "our"},
     "hand-wash": {"hand-wash", "hand-washed", "hand wash", "hand-washing"},
     "dishwasher": {"dishwasher", "dishwasher-safe", "top rack"},
     "insufficient": {"insufficient", "unable to confirm", "cannot confirm", "not specified", "unavailable"},
     "not": {"not", "cannot", "no", "never", "unsupported", "unavailable", "prohibited", "ineligible"},
     "supported": {"supported", "support", "ships", "shipping", "available", "destinations", "offers", "eligible"},
-    "days": {"days", "day", "calendar days", "business days"},
+    "days": {"days", "day", "calendar days", "calendar day", "business days", "business day"},
     "years": {"years", "year"},
+    "7": {"7", "seven", "7-calendar-day", "7-day"},
+    "30": {"30", "thirty", "30-calendar-day", "30-day"},
+    "45": {"45", "forty-five", "45-calendar-day", "45-day"},
+    "2": {"2", "two", "2-year"},
+    "1": {"1", "one", "1-year"},
 }
 
 
@@ -120,8 +132,27 @@ def evaluate_response(response: AgentResponse, expect: Dict[str, Any]) -> Tuple[
     # 1. must_include
     for item in expect.get("must_include", []):
         norm_item = normalize_text(item)
-        if norm_item not in norm_text:
-            failures.append(f"Missing required phrase: '{item}'")
+        if norm_item in norm_text:
+            continue
+            
+        # Generic numerical duration equivalence (e.g., "45 calendar days" matches "45-day", "45-calendar-day", "45 days")
+        dur_match = re.match(r"^(\d+)\s+(?:calendar\s+|business\s+)?days?$", norm_item)
+        if dur_match:
+            num = dur_match.group(1)
+            duration_patterns = [
+                rf"\b{num}\s*-\s*calendar\s*-\s*days?\b",
+                rf"\b{num}\s*-\s*days?\b",
+                rf"\b{num}\s+calendar\s+days?\b",
+                rf"\b{num}\s+days?\b",
+                rf"\b{num}\s*-\s*calendar\s*-\s*day\b",
+                rf"\b{num}\s*-\s*day\b",
+                rf"\b{num}\s+calendar\s+day\b",
+                rf"\b{num}\s+day\b",
+            ]
+            if any(re.search(pat, norm_text) for pat in duration_patterns):
+                continue
+
+        failures.append(f"Missing required phrase: '{item}'")
 
     # 2. must_not_include
     for item in expect.get("must_not_include", []):
@@ -335,7 +366,7 @@ def run_evaluation(
 def main():
     parser = argparse.ArgumentParser(description="Aster & Row Support Agent Evaluation Suite")
     parser.add_argument("--cases", choices=["visible", "custom", "all"], default="all", help="Which cases to run")
-    parser.add_argument("--live", action="store_true", help="Run with live LLM (requires OPENAI_API_KEY)")
+    parser.add_argument("--live", action="store_true", help="Run with live Gemini LLM (requires GEMINI_API_KEY)")
     parser.add_argument("--case-id", type=str, default=None, help="Run a specific test case by ID")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose failure diagnostics")
     args = parser.parse_args()

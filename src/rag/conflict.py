@@ -12,22 +12,12 @@ class ConflictDetector:
     across distinct active official knowledge-base documents without hardcoded filenames.
     """
 
-    # Generic semantic modality polarities
+    # Generic semantic modality polarities for care/cleaning/temperature maintenance
     POLARITY_PAIRS = [
-        # Care/Cleaning: Manual/Restrictive vs Automated/Permissive
+        # Care/Cleaning/Maintenance: Hand-wash / Manual / Restrictive vs Dishwasher / Machine Washable / Permissive
         (
-            {"hand-washed", "hand-wash", "hand wash", "spot-clean", "spot clean", "do not machine wash", "never place in", "top rack only", "hand wash only"},
-            {"dishwasher safe", "dishwasher", "machine washable", "machine wash", "all components are dishwasher safe", "all components"}
-        ),
-        # Eligibility: Prohibited vs Permitted
-        (
-            {"cannot be returned", "not returnable", "not eligible for return", "final sale", "no refunds", "non-returnable"},
-            {"may request a return", "eligible for return", "can be returned", "returnable", "full refund eligible"}
-        ),
-        # Shipping/Availability: Excluded vs Included
-        (
-            {"not available", "unsupported", "does not ship", "cannot ship to"},
-            {"is supported", "ships to", "available for shipping", "supported destinations"}
+            {"hand-washed", "hand-wash", "hand wash", "spot-clean", "spot clean", "do not machine wash", "never place in", "top rack only", "hand wash only", "body must be hand-washed"},
+            {"dishwasher safe", "dishwasher", "machine washable", "machine wash", "all components are dishwasher safe", "completely dishwasher safe", "all components"}
         ),
         # Temperature/Heat: Low/No Heat vs High Heat
         (
@@ -46,10 +36,18 @@ class ConflictDetector:
         Returns:
             (is_conflict, [conflicting_chunks], explanation_text)
         """
+        if not chunks:
+            return False, [], None
+
+        # Only evaluate conflicts when query relates to care, cleaning, temperature, or maintenance
+        if query:
+            is_care_query = any(w in query.lower() for w in ["wash", "clean", "dishwasher", "machine", "care", "dry", "microwave", "temperature", "heat", "hand-wash"])
+            if not is_care_query:
+                return False, [], None
+
         # Group chunks by document ID
         docs_map: Dict[str, List[RetrievedChunk]] = {}
         for c in chunks:
-            # Only consider active official documents
             if c.metadata.status == "active" and c.metadata.policy_authority == "official":
                 doc_id = c.metadata.document_id
                 if doc_id not in docs_map:
@@ -94,8 +92,14 @@ class ConflictDetector:
         tokens2 = set(re.findall(r"\b[a-z0-9]{3,}\b", text2))
         
         shared_subject_tokens = tokens1.intersection(tokens2)
-        # Filter out common policy generic terms
-        generic_terms = {"the", "and", "for", "with", "item", "product", "policy", "customer", "orders", "days"}
+        # Filter out common generic terms
+        generic_terms = {
+            "the", "and", "for", "with", "item", "items", "product", "products",
+            "policy", "customer", "customers", "orders", "order", "days", "day",
+            "standard", "agent", "support", "information", "status", "date",
+            "available", "review", "details", "current", "official", "when", "that",
+            "this", "will", "from", "have", "been", "must", "time"
+        }
         shared_subject_tokens = {t for t in shared_subject_tokens if t not in generic_terms}
 
         if not shared_subject_tokens:
@@ -103,7 +107,6 @@ class ConflictDetector:
 
         # Check against polarity pairs
         for set_a, set_b in cls.POLARITY_PAIRS:
-            # Check if c1 has match in set_a and c2 has match in set_b (or vice versa)
             match_1a = any(term in text1 for term in set_a)
             match_2b = any(term in text2 for term in set_b)
             
@@ -111,7 +114,6 @@ class ConflictDetector:
             match_2a = any(term in text2 for term in set_a)
 
             if (match_1a and match_2b) or (match_1b and match_2a):
-                # Find matching sentences
                 s1_candidates = [s for s in split_sentences(c1.content) if any(t in s.lower() for t in (set_a if match_1a else set_b))]
                 s2_candidates = [s for s in split_sentences(c2.content) if any(t in s.lower() for t in (set_b if match_1a else set_a))]
                 

@@ -105,7 +105,7 @@ def main():
     parser = argparse.ArgumentParser(description="Aster & Row Support Agent CLI")
     parser.add_argument("query", nargs="?", type=str, default=None, help="Single query to process")
     parser.add_argument("--debug", "-d", action="store_true", help="Display debug observability trace")
-    parser.add_argument("--live", action="store_true", help="Use live LLM mode (requires OPENAI_API_KEY)")
+    parser.add_argument("--live", action="store_true", help="Use live Gemini LLM mode (requires GEMINI_API_KEY)")
     args = parser.parse_args()
 
     agent = SupportAgent(force_mock_mode=not args.live)

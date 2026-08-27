@@ -1,87 +1,16 @@
-"""In-memory BM25F retriever with field weighting, coordination matching, and metadata-driven precedence."""
-
 import math
-import re
 from collections import Counter
+from typing import List, Dict, Tuple, Optional
 from pathlib import Path
-from typing import List, Dict, Set, Optional, Tuple
 
 from src.config import KNOWLEDGE_BASE_DIR
-from src.models.schemas import RetrievedChunk, DocumentMetadata
+from src.models.schemas import RetrievedChunk
 from src.rag.base import BaseRetriever
 from src.rag.parser import KnowledgeBaseParser
-
-
-STOPWORDS: Set[str] = {
-    "a", "about", "all", "an", "and", "any", "are", "as", "at", "be", "been",
-    "being", "but", "by", "can", "could", "did", "do", "does", "doe", "for", "from",
-    "had", "has", "have", "how", "i", "if", "in", "into", "is", "it", "its",
-    "may", "might", "must", "my", "of", "on", "or", "our", "shall",
-    "should", "so", "some", "that", "the", "their", "them", "there", "these",
-    "they", "this", "those", "to", "too", "up", "was", "we", "were", "what",
-    "when", "where", "which", "who", "whom", "whose", "why", "will", "with",
-    "would", "you", "your", "tell", "please", "check", "long", "much",
-    "take", "takes", "taking", "took", "get", "gets", "getting", "got", "give", "know"
-}
-
-
-def stem(word: str) -> str:
-    """Lightweight rule-based stemmer for inflectional suffixes in policy retrieval."""
-    w = word.lower()
-    if len(w) <= 3:
-        return w
-    if w.endswith("shipping") or w.endswith("shipped") or w.endswith("ships"): return "ship"
-    if w.endswith("returns") or w.endswith("returned") or w.endswith("returning"): return "return"
-    if w.endswith("orders") or w.endswith("ordered") or w.endswith("ordering"): return "order"
-    if w.endswith("damages") or w.endswith("damaged"): return "damag"
-    if w.endswith("defective") or w.endswith("defects"): return "defect"
-    if w.endswith("adjustments") or w.endswith("adjustment"): return "adjust"
-    if w.endswith("cancellations") or w.endswith("cancellation"): return "cancel"
-    if w.endswith("countries"): return "country"
-    if w.endswith("ing") and len(w) > 5: return w[:-3]
-    if w.endswith("ed") and len(w) > 4: return w[:-2]
-    if w.endswith("es") and len(w) > 4: return w[:-2]
-    if w.endswith("s") and not w.endswith("ss") and len(w) > 3: return w[:-1]
-    return w
-
-
-def tokenize(text: str, filter_stopwords: bool = False) -> List[str]:
-    """Tokenize text into lowercase alphanumeric tokens, including stemmed variants."""
-    cleaned = text.lower().replace("–", "-").replace("—", "-")
-    raw_tokens = re.findall(r"\b[a-z0-9]+(?:-[a-z0-9]+)?\b", cleaned)
-    tokens: List[str] = []
-    for t in raw_tokens:
-        if "-" in t:
-            parts = t.split("-")
-            tokens.append(stem(t))
-            tokens.extend(stem(p) for p in parts)
-        else:
-            tokens.append(stem(t))
-
-    # If the text asks about shipping/delivery to a destination ("ship ... to <X>", "deliver ... to <X>")
-    if "address" not in cleaned and re.search(r"\b(?:ship|shipping|ships|deliver|delivery|send)\b.*?\b(?:to|in)\s+[a-z0-9]+", cleaned):
-        tokens.append(stem("destinations"))
-
-    if filter_stopwords:
-        filtered = [t for t in tokens if t not in STOPWORDS and len(t) > 1]
-        return filtered if filtered else tokens
-    return tokens
+from src.rag.bm25_retriever import tokenize, stem, STOPWORDS
 
 
 class InMemoryBM25Retriever(BaseRetriever):
-    """
-    Modular, deterministic, in-memory BM25F retriever over parsed knowledge-base sections.
-    
-    Features:
-    - Zero external vector DB dependencies.
-    - Deterministic metadata-driven policy filtering (status == active, policy_authority == official).
-    - Field weighting (title=3.5, heading=4.5, body=1.0) for high-precision section matching.
-    - Query coordination factor to heavily reward multi-term coverage over single incidental words.
-    - Exact phrase / bigram proximity matching.
-    - Domain alignment boost to prioritize relevant policy sections.
-    - Modular implementation conforming to BaseRetriever interface.
-    """
-
     def __init__(
         self,
         kb_dir: Optional[Path] = None,
@@ -101,7 +30,6 @@ class InMemoryBM25Retriever(BaseRetriever):
         self.all_chunks: List[RetrievedChunk] = []
         self.active_chunks: List[RetrievedChunk] = []
         
-        # BM25F structures
         self.doc_freqs: Dict[str, int] = Counter()
         self.weighted_lens: List[float] = []
         self.chunk_weighted_tfs: List[Dict[str, float]] = []
@@ -111,7 +39,6 @@ class InMemoryBM25Retriever(BaseRetriever):
         self._load_and_index()
 
     def _load_and_index(self) -> None:
-        """Parse all markdown documents in the knowledge base and build BM25 structures."""
         if not self.kb_dir.exists():
             return
 
@@ -120,9 +47,6 @@ class InMemoryBM25Retriever(BaseRetriever):
             chunks_list.extend(KnowledgeBaseParser.parse_file(fpath))
 
         self.all_chunks = chunks_list
-
-        # Metadata-driven precedence filtering:
-        # Only documents that are currently active, official, not superseded, and customer_answering=True
         self.active_chunks = [
             c for c in self.all_chunks
             if c.metadata.status == "active"
@@ -162,13 +86,9 @@ class InMemoryBM25Retriever(BaseRetriever):
         self.avg_w_len = sum(self.weighted_lens) / self.corpus_size if self.corpus_size > 0 else 1.0
 
     def get_all_chunks(self) -> List[RetrievedChunk]:
-        """Return all indexed section chunks."""
         return list(self.all_chunks)
 
     def is_query_covered(self, query: str, retrieved_chunks: Optional[List[RetrievedChunk]] = None) -> bool:
-        """
-        Check if query terms have sufficient representation in the retrieved active chunks.
-        """
         chunks = retrieved_chunks if retrieved_chunks is not None else self.retrieve(query, top_k=6)
         if not chunks:
             return False
@@ -177,9 +97,9 @@ class InMemoryBM25Retriever(BaseRetriever):
         if not query_tokens:
             return True
             
-        retrieved_text = " ".join(f"{c.title} {c.heading} {c.content}" for c in chunks).lower()
+        retrieved_text = " ".join(f"{c.title} {c.heading} {c.content}" for c in chunks)
         retrieved_tokens = set(tokenize(retrieved_text))
-        missing_tokens = [t for t in query_tokens if t not in retrieved_tokens and stem(t) not in retrieved_tokens]
+        missing_tokens = [t for t in query_tokens if t not in retrieved_tokens and t.rstrip("s") not in retrieved_tokens]
         
         is_ship_rule = "ship" in query_tokens and any("ship" in f"{c.title} {c.heading} {c.content}".lower() for c in chunks)
         is_return_rule = "return" in query_tokens and any("return" in c.title.lower() for c in chunks)
@@ -191,10 +111,10 @@ class InMemoryBM25Retriever(BaseRetriever):
         if is_ship_rule or is_return_rule or is_warranty_rule or is_damage_rule:
             return True
 
-        meaningful_missing = [t for t in missing_tokens if len(t) > 2 and t not in STOPWORDS]
-        if len(meaningful_missing) >= 2 or (len(meaningful_missing) >= 1 and (len(meaningful_missing) / len(query_tokens)) >= 0.5):
-            return False
-
+        if len(missing_tokens) >= 2 or (len(missing_tokens) >= 1 and (len(missing_tokens) / len(query_tokens)) > 0.45):
+            if chunks[0].score < 10.0:
+                return False
+                
         return True
 
     def retrieve(
@@ -203,9 +123,6 @@ class InMemoryBM25Retriever(BaseRetriever):
         top_k: int = 6,
         filter_active_only: bool = True,
     ) -> List[RetrievedChunk]:
-        """
-        Retrieve top_k chunks matching the query using BM25F with coordination and field weighting.
-        """
         target_chunks = self.active_chunks if filter_active_only else self.all_chunks
         if not target_chunks or not query:
             return []
@@ -263,9 +180,8 @@ class InMemoryBM25Retriever(BaseRetriever):
             # 3. Domain Alignment Boost
             title_heading = f"{chunk.title} {chunk.heading}".lower()
             for q_term in query_tokens:
-                st = stem(q_term)
-                if st in ["return", "ship", "warranti", "damag", "defect", "broken", "cancel", "adjust", "care", "membership"]:
-                    if st in title_heading or (st in ["defect", "broken"] and any(w in title_heading for w in ["damage", "defect", "wrong"])):
+                if q_term in ["return", "ship", "warranti", "damag", "cancel", "adjust", "care", "membership"]:
+                    if stem(q_term) in title_heading:
                         score += 4.0
 
             scores.append((score, idx))
@@ -279,3 +195,17 @@ class InMemoryBM25Retriever(BaseRetriever):
             results.append(chunk)
 
         return results
+
+r = InMemoryBM25Retriever()
+
+# Test 1: Return-window question ranks return policy above warranty and shipping
+res1 = r.retrieve("How long does a regular customer have to return an unused backpack?", top_k=6)
+print("Query 1:", [(c.file_name, c.heading, round(c.score, 2)) for c in res1])
+
+# Test 2: Shipping question ranks shipping sections above warranty sections
+res2 = r.retrieve("If my order subtotal is $60 and I have a standard account, do I get free shipping in the US?", top_k=6)
+print("Query 2:", [(c.file_name, c.heading, round(c.score, 2)) for c in res2])
+
+# Test 3: Order-only question returns no irrelevant chunks
+res3 = r.retrieve("Where is ORD-1007?", top_k=6)
+print("Query 3 (Order only):", [(c.file_name, c.heading, round(c.score, 2)) for c in res3])
