@@ -106,7 +106,14 @@ def main():
     parser.add_argument("query", nargs="?", type=str, default=None, help="Single query to process")
     parser.add_argument("--debug", "-d", action="store_true", help="Display debug observability trace")
     parser.add_argument("--live", action="store_true", help="Use live Gemini LLM mode (requires GEMINI_API_KEY)")
+    parser.add_argument("--web", action="store_true", help="Launch the Web GUI server")
+    parser.add_argument("--port", type=int, default=8000, help="Port to listen on for Web GUI (default: 8000)")
     args = parser.parse_args()
+
+    if args.web:
+        from src.web.main import start_server
+        start_server(port=args.port)
+        return
 
     agent = SupportAgent(force_mock_mode=not args.live)
     session_manager = SessionManager()

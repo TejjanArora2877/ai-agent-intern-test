@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aster &amp; Row — AI Support Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h1 class="brand-title">Aster &amp; Row</h1>
+          <span class="brand-subtitle">Customer Support AI Assistant</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <!-- Execution Mode Selector -->
+        <div class="mode-selector-wrapper">
+          <label for="mode-select" class="control-label">Mode:</label>
+          <select id="mode-select" class="mode-select">
+            <option value="offline" selected>Offline (Deterministic RAG)</option>
+            <option value="live">Live Gemini LLM</option>
+          </select>
+          <span id="live-badge" class="status-badge badge-offline">Offline Mode</span>
+        </div>
+
+        <!-- Session ID & Controls -->
+        <div class="session-info-wrapper">
+          <div class="session-badge" title="Click to copy Session ID" id="session-badge-btn">
+            <span class="session-label">Session:</span>
+            <span id="session-id-text" class="session-id">Initializing...</span>
+            <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </div>
+          <button id="new-chat-btn" class="btn btn-secondary" title="Start a fresh conversation session">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            New Chat
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Chat Workspace -->
+    <main class="chat-workspace">
+      <div id="chat-messages" class="messages-container">
+        <!-- Welcome Message Banner -->
+        <div class="welcome-card">
+          <div class="welcome-icon">👋</div>
+          <div class="welcome-content">
+            <h3>Welcome to Aster &amp; Row Support</h3>
+            <p>I can help you check return policies, domestic &amp; international shipping timelines, product warranty coverage, product care guidelines, or track your orders.</p>
+            <div class="sample-queries">
+              <span class="sample-label">Try asking:</span>
+              <button class="sample-chip" data-query="What is your return window for standard orders?">Return Policy</button>
+              <button class="sample-chip" data-query="Where is ORD-1007 and when will it arrive?">Track ORD-1007</button>
+              <button class="sample-chip" data-query="Do you ship internationally to Canada?">Canada Shipping</button>
+              <button class="sample-chip" data-query="Can I put the Breeze Tumbler in the dishwasher?">Tumbler Care</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typing Indicator Dot Animation -->
+      <div id="typing-indicator" class="typing-indicator hidden">
+        <div class="agent-avatar small">A&amp;R</div>
+        <div class="typing-bubble">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <span class="typing-text">Support agent is formulating response...</span>
+      </div>
+    </main>
+
+    <!-- Bottom Input Dock -->
+    <footer class="input-dock">
+      <form id="chat-form" class="input-form">
+        <div class="input-wrapper">
+          <textarea
+            id="user-input"
+            class="chat-input"
+            placeholder="Type your message or order inquiry here... (Enter to send, Shift+Enter for newline)"
+            rows="1"
+            required
+          ></textarea>
+          <button type="submit" id="send-btn" class="btn btn-primary send-btn" title="Send message">
+            <span class="send-text">Send</span>
+            <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+      </form>
+      <div class="input-footer-note">
+        <span>Powered by Aster &amp; Row Agentic RAG Engine with Privacy Preservation &amp; Conflict Detection</span>
+      </div>
+    </footer>
+
+    <!-- Error Toast Notification -->
+    <div id="toast" class="toast hidden">
+      <div class="toast-content">
+        <span id="toast-message">Error message here</span>
+      </div>
+      <button id="toast-close" class="toast-close">&times;</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
