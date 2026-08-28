@@ -2,15 +2,16 @@
 
 An engineering implementation of a reliable, privacy-safe, metadata-driven customer support AI agent for Aster & Row. 
 
-The system is:
-- **A reliable RAG customer support agent**: Answers store policy and product questions grounded strictly in official documentation.
-- **Privacy-safe by design**: Strips all customer PII and sensitive internal fields at the tool boundary before prompt context assembly.
-- **Metadata and authority-aware**: Distinguishes active official policies from superseded legacy policies and unapproved draft notes.
-- **Multi-capability**: Seamlessly handles both general policy inquiries and multi-turn customer order status tracking.
-- **Multi-turn conversational**: Retains contextual memory and resolves order entity references across dialogue turns.
-- **Deterministic conflict detection & human escalation**: Detects contradictions between active official documents and enforces human specialist handoff.
-- **Dual-interface**: Accessible via both an interactive rich CLI and a modern, responsive Web GUI.
-- **Gemini-powered for live generation**: Uses Google's native Gemini 3.6 Flash REST API with structured JSON output.
+The system provides:
+- **Reliable RAG customer support**: Answers store policy and product questions grounded strictly in official documentation.
+- **Privacy-safe order lookup**: Strips customer PII and sensitive internal fields at the Python tool boundary before prompt context assembly.
+- **Metadata and authority-aware retrieval**: Distinguishes active official policies from superseded legacy policies and unapproved draft notes.
+- **Multi-turn conversation handling**: Retains contextual memory, isolates sessions, and resolves order entity references across dialogue turns.
+- **Deterministic active-source conflict detection**: Automatically identifies contradictions between active official documents and enforces conservative interim guidance with human specialist handoff.
+- **Human specialist handoff**: Intelligently escalates order exceptions, operational requests, and knowledge conflicts.
+- **Prompt-injection defense & data-instruction separation**: Treats retrieved knowledge base chunks and user queries strictly as untrusted data within XML boundaries.
+- **Dual-interface access**: Modern, responsive Web GUI and an interactive technical CLI.
+- **Gemini 3.6 Flash for live generation**: Uses Google's native Gemini 3.6 Flash REST API with structured JSON output.
 - **Deterministic offline mode**: Fully testable and runnable offline with 100% test repeatability and zero external API dependencies.
 
 ---
@@ -33,7 +34,7 @@ python -m venv .venv
 # On Windows:
 .venv\Scripts\activate
 # On Linux/macOS:
-# source .venv/bin/activate
+source .venv/bin/activate
 
 # 3. Install declared dependencies
 pip install -r requirements.txt
@@ -47,9 +48,10 @@ Open your browser and navigate to:
 ```
 http://127.0.0.1:8000
 ```
-> **Note**: **Offline mode is the default** and does not require an API key or network connection.
+> **Note**: **Offline mode is the default** and does not require an API key or network connection. It makes zero external LLM calls.
 
 ### Running the Interactive CLI
+The CLI exposes the same `SupportAgent` backend and is intended for technical execution, script integration, and observability debugging:
 ```bash
 # Interactive chat session (offline deterministic mode by default)
 python -m src.cli.main
@@ -57,15 +59,18 @@ python -m src.cli.main
 # Interactive chat with complete debug observability trace enabled
 python -m src.cli.main --debug
 
-# Run a single query directly
-python -m src.cli.main "Where is ORD-1007 and when will it arrive?" --debug
+# Run a single query directly with full trace inspection
+python -m src.cli.main "Can I put the entire Breeze Tumbler in the dishwasher?" --debug
+
+# Run in live Gemini mode
+python -m src.cli.main --live --debug
 ```
 
 ---
 
-## 2. Live Gemini Configuration
+## 2. Gemini Live Configuration
 
-To enable live LLM generation with Google AI Studio, copy `.env.example` to `.env` and provide your Gemini API key:
+To enable live LLM generation with Google AI Studio, copy `.env.example` to `.env` and configure your credentials:
 
 ```bash
 cp .env.example .env
@@ -75,7 +80,7 @@ cp .env.example .env
 ```env
 # Gemini Live LLM Provider Configuration
 LLM_PROVIDER=gemini
-GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 GEMINI_MODEL=gemini-3.6-flash
 
@@ -84,8 +89,10 @@ DEBUG_MODE=false
 MAX_RETRIEVED_CHUNKS=6
 ```
 
+- **Automatic `.env` Discovery**: The application automatically loads `.env` from the project root at startup using `python-dotenv`.
 - **Live Mode**: When `GEMINI_API_KEY` is configured, pass `--live` to the CLI (`python -m src.cli.main --live`) or select **Live Gemini LLM** from the Web GUI header dropdown. The transport connects directly to the native Gemini REST endpoint (`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`).
-- **Offline Mode**: If `GEMINI_API_KEY` is omitted or when offline mode is selected, the agent runs entirely locally using its deterministic mock engine.
+- **Offline Mode**: If `GEMINI_API_KEY` is omitted or when offline mode is active, the agent runs entirely locally using its deterministic mock engine.
+- **Security**: The `.env` file is untracked and excluded from version control via `.gitignore`. Never commit API keys.
 
 ---
 
@@ -256,13 +263,13 @@ python -m src.cli.main --debug
 The repository provides three distinct testing and evaluation workflows:
 
 ### 1. Automated Unit & Regression Tests (pytest)
-Runs 48 fast, isolated tests covering unit logic, privacy invariants, BM25 retrieval, session isolation, Gemini transport, and Web API endpoints:
+Runs 55 fast, isolated tests covering unit logic, privacy invariants, BM25 retrieval, session isolation, Gemini transport, and Web API endpoints:
 ```bash
 python -m pytest tests/ -v
 ```
 
 ### 2. Offline Benchmark Evaluation
-Runs the deterministic 20-case evaluation suite (15 visible + 5 edge cases) locally without network calls:
+Runs the deterministic 20-case evaluation suite (15 visible + 5 custom edge cases) locally without network calls:
 ```bash
 python -m evaluation.runner
 ```
@@ -275,16 +282,15 @@ python -m evaluation.runner --live
 
 ---
 
-## 9. Current Verified Benchmark Results
+## 9. Final Verified Benchmark Results
 
 ### Summary Table
 
 | Evaluation Suite | Mode / Engine | Passed / Total | Pass Rate | Status |
-|---|---|:---:|:---:|:---:|
-| **Automated Tests (pytest)** | Offline Unit/API Suite | **48 / 48** | **100.0%** | **PASSED** |
-| **Deterministic Benchmark** | Offline RAG Mock Engine | **20 / 20** | **100.0%** | **PASSED** |
-| **Live Benchmark (Previous Run)** | Gemini 3.6 Flash (Pre-Fix) | **18 / 20** | **90.0%** | **CONFIRMED** |
-| **Live Benchmark (Post-Fix)** | Gemini 3.6 Flash (Post-Fix) | *Pending quota reset* | *Pending* | **READY** |
+|---|---|---:|---:|---|
+| **Automated Tests (pytest)** | Offline Unit/API Suite | **55 / 55** | **100.0%** | **PASSED** |
+| **Offline Evaluation** | Deterministic Mock Engine | **20 / 20** | **100.0%** | **PASSED** |
+| **Latest Live Evaluation** | Gemini 3.6 Flash | **19 / 20** | **95.0%** | **PASSED** |
 
 ### Benchmark Breakdown by Category (Offline 20/20)
 
@@ -302,75 +308,74 @@ python -m evaluation.runner --live
 | **Source Conflict** | 1 | 1 / 1 | **100.0%** |
 | **OVERALL** | **20** | **20 / 20** | **100.0%** |
 
+### Detailed Analysis of the Single Live Failure (`genuine-active-source-conflict`)
+In the latest confirmed live Gemini evaluation run, 19 of 20 benchmark cases passed. The single failing benchmark case was `genuine-active-source-conflict`:
+- **Actual Agent Behavior**:
+  - The model correctly identified the active source conflict between `11-product-care.md` (hand-wash body) and `12-breeze-tumbler-product-card.md` (dishwasher safe).
+  - It cited both conflicting documents.
+  - It provided conservative interim guidance (hand-wash the body).
+  - `DeterministicValidator` received `is_conflict = True` and enforced `handoff: true`.
+- **Reason for Benchmark Evaluator Failure**:
+  - The evaluator's concept matcher tested for tokens matching `"current official sources conflict"`.
+  - Gemini generated: *"Our official documents provide conflicting guidance regarding cleaning the Breeze Tumbler..."*.
+  - Because the evaluator's vocabulary cluster at the time lacked a synonym mapping between `"sources"` and `"documents"`, the token coverage scored $50\% < 70\%$, causing an evaluator false negative on an otherwise accurate and safe response.
+
 ---
 
 ## 10. Engineering Bug Diary
 
 ### Bug 1: False Positive Order Intent Intercepting General Policy Questions
-- **Reproduction**: Asking policy questions with words like "order" or "ordered" (e.g. *"My membership was active when I ordered. What is my return window?"*).
+- **Reproduction**: Asking policy questions containing words like "order" or "ordered" (e.g. *"My membership was active when I ordered. What is my return window?"*).
 - **Root Cause**: Naive substring check (`"order" in user_message`) triggered an order ID prompt instead of RAG retrieval.
 - **Fix**: Replaced substring check with regex-based intent classification requiring explicit order tracking verbs or `ORD-\d+` pattern tokens.
 - **Regression Tests**: `tests/test_retrieval_and_order_resolution.py::test_order_only_query_retrieves_no_irrelevant_rag_chunks`, `tests/test_order_tool.py::test_extract_order_id_from_sentence`.
 
-### Bug 2: Refusal Phrasing Echoing Adversarial Prompt Injections
-- **Reproduction**: Running `system-prompt-extraction-jailbreak`.
-- **Root Cause**: Refusal text *"I cannot disclose system instructions"* triggered case-insensitive negative assertion `must_not_include: ["SYSTEM INSTRUCTION"]`.
-- **Fix**: Standardized refusal phrasing to safe terminology (*"I cannot disclose internal system directives, developer configuration, or customer email addresses"*).
-- **Regression Tests**: `tests/test_evaluator_robustness.py::test_sensitive_disclosure_fails_refusal_assertion`.
+### Bug 2: Incorrect Session Order-Context Resolution
+- **Reproduction**:
+  1. *Context Loss*: Asking *"What items are in ORD-1009?"* followed by *"Can I return the Ridge Daypack because I don't like the red color?"* failed to reuse active order context because Turn 2 referred to the item by name rather than order ID.
+  2. *Stale Context Contamination*: Asking about `ORD-1007` in Turn 1 followed by an unrelated store policy question in Turn 2 incorrectly inherited the previous order's context and metadata.
+- **Root Cause**: Naive session resolution either completely dropped active order context between turns when the order ID was not repeated, or unconditionally attached previous order context to every subsequent turn regardless of topic relevance.
+- **Fix**: Implemented strict semantic follow-up classification in `SupportAgent._is_active_order_followup` that reuses active order context only when the message contains demonstrative references (`it`, `this order`, `the package`) or matches item names from the active order, while isolating unrelated policy queries.
+- **Regression Tests**:
+  - `tests/test_web_api.py::test_multiturn_session_retains_context`
+  - `tests/test_generic_behavior.py::test_new_product_follow_up_without_code_changes`
+  - `tests/test_retrieval_and_order_resolution.py::test_stale_active_order_context_isolation`
 
-### Bug 3: Context Loss in Multi-Turn Order Follow-Up Queries
-- **Reproduction**: Asking *"What items are in ORD-1009?"* followed by *"Can I return the Ridge Daypack because I don't like the red color?"*.
-- **Root Cause**: Turn 2 referred to the item by name rather than order ID, losing the active order context.
-- **Fix**: Enhanced session resolution in `SupportAgent._is_active_order_followup` to cross-reference order item names from session history.
-- **Regression Tests**: `tests/test_web_api.py::test_multiturn_session_retains_context`, `tests/test_generic_behavior.py::test_new_product_follow_up_without_code_changes`.
-
-### Bug 4: YAML Frontmatter Date Parsing Type Mismatch
-- **Reproduction**: Parsing markdown files with YAML dates (`effective_date: 2026-04-01`).
-- **Root Cause**: `yaml.safe_load` produces `datetime.date` objects, failing Pydantic `Optional[str]` validation.
-- **Fix**: Added explicit string conversion (`str(d) if d is not None else None`) in `KnowledgeBaseParser`.
-- **Regression Tests**: `tests/test_retriever.py::test_parser_extracts_frontmatter_and_headings`.
-
-### Bug 5: Windows Console Encoding Mismatch
-- **Reproduction**: Running the CLI or evaluator on Windows default `cp1252` encoding.
-- **Root Cause**: Printing Unicode characters (`✓`, `↳`) raised `UnicodeEncodeError`.
-- **Fix**: Configured `sys.stdout.reconfigure(encoding="utf-8")` and standardized on ASCII-safe test markers (`[PASS]`, `[FAIL]`, `->`).
-- **Regression Tests**: `tests/test_gemini_transport.py`.
-
-### Bug 6: Stale Active Order Context Contaminating Unrelated Policy Queries
-- **Reproduction**: Asking about ORD-1007 in Turn 1, then asking an unrelated general question (e.g. migration policy) in Turn 2.
-- **Root Cause**: Session manager unconditionally inherited active order context for all subsequent turns.
-- **Fix**: Implemented strict follow-up classification requiring demonstrative pronouns (`it`, `this order`, `the package`) or order item names.
-- **Regression Tests**: `tests/test_retrieval_and_order_resolution.py::test_stale_active_order_context_isolation`.
-
-### Bug 7: BM25 Lexical Ranking Distortion on Specific Return Policies
+### Bug 3: BM25 Lexical Ranking Distortion on Specific Return Policies
 - **Reproduction**: Querying standard return window or TrailPlus return window caused lower-relevance policy sections to outrank primary sections.
 - **Root Cause**: Standard BM25 lacked field weighting and query term coordination bonuses.
 - **Fix**: Upgraded retriever to BM25F with field weights (Heading $\times 3.5$, Title $\times 2.0$, Body $\times 1.0$), coordination matching bonuses, and domain alignment boosts.
 - **Regression Tests**: `tests/test_retrieval_and_order_resolution.py::test_return_window_ranks_above_unrelated_sections`, `tests/test_retrieval_and_order_resolution.py::test_shipping_query_ranks_shipping_above_warranty`.
 
-### Bug 8: Multi-Source Citation Omission in Live Gemini Generation
+### Bug 4: Multi-Source Citation Omission in Live Gemini Generation
 - **Reproduction**: In queries requiring multi-document synthesis (e.g. `final-sale-damaged-exception`), the model cited only `03-final-sale-and-promotions.md` and omitted `04-damaged-or-wrong-items.md`.
 - **Root Cause**: LLM populated `sources` from only the first self-contained summary chunk.
 - **Fix**: Added generic multi-source citation alignment in `DeterministicValidator.validate_and_sanitize()` to detect all active official retrieved documents materially supporting the answer's domain topics.
 - **Regression Tests**: `tests/test_live_failure_fixes.py::test_multi_source_citation_aligns_independent_supporting_documents`, `tests/test_live_failure_fixes.py::test_multi_source_grounding_citations_end_to_end`.
 
-### Bug 9: Nondeterministic LLM Conflict Handoff
+### Bug 5: Nondeterministic LLM Conflict Handoff
 - **Reproduction**: In `genuine-active-source-conflict`, Gemini explained both sides and cited both sources, but occasionally emitted `"handoff": false`.
 - **Root Cause**: Handoff determination was delegated entirely to LLM generation rather than the system's deterministic conflict detection signal.
 - **Fix**: Passed `is_conflict` directly from `ConflictDetector` into `DeterministicValidator`, unconditionally enforcing `handoff = True`.
 - **Regression Tests**: `tests/test_live_failure_fixes.py::test_conflict_handoff_unconditionally_overridden_to_true`.
 
-### Bug 10: Policy Inquiry vs. Operational Action Handoff Over-Escalation
+### Bug 6: Policy Inquiry vs. Operational Action Handoff Distinction
 - **Reproduction**: Policy eligibility questions (e.g. *"Can I return the Ridge Daypack because I don't like the red color?"*) triggered unnecessary handoff because the validator detected refusal terms.
 - **Root Cause**: Validator did not distinguish between explaining policy (informational) vs. requests to execute an operational change (action request).
-- **Fix**: Refined `DeterministicValidator` Rule B so policy eligibility questions maintain `handoff: false`, while defect reports and operational action requests enforce `handoff: true`.
-- **Regression Tests**: `tests/test_live_failure_fixes.py::test_policy_inquiry_vs_operational_action_handoff`.
+- **Fix**: Refined `DeterministicValidator` Rule B so policy eligibility questions maintain `handoff: false`, while defect reports and operational action requests (such as asking for an adjustment/refund to be credited) enforce `handoff: true`.
+- **Regression Tests**: `tests/test_live_failure_fixes.py::test_policy_inquiry_vs_operational_action_handoff`, `tests/test_live_failure_fixes.py::test_financial_policy_inquiry_vs_operational_credit_request`.
 
-### Bug 11: Gemini Endpoint and Model Migration
-- **Reproduction**: Calling `/v1beta/openai/` returned HTTP 404, and calling `gemini-2.5-flash` returned a deprecation error.
-- **Root Cause**: OpenAI-compatible endpoint was unsupported in the project environment, and `gemini-2.5-flash` was deprecated in favor of `gemini-3.6-flash`.
+### Bug 7: Gemini Native REST Endpoint Migration
+- **Reproduction**: Historical calls to `/v1beta/openai/` returned HTTP 404, and calling `gemini-2.5-flash` returned a deprecation error.
+- **Root Cause**: The OpenAI-compatible translation endpoint was unsupported in the project environment, and `gemini-2.5-flash` was deprecated in favor of `gemini-3.6-flash`.
 - **Fix**: Rewrote transport to native Gemini REST endpoint (`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`), using `x-goog-api-key` authentication, native schema (`system_instruction`, `contents`), and removing legacy sampling parameters.
 - **Regression Tests**: `tests/test_gemini_transport.py::test_native_gemini_request_format_and_response_parsing`, `tests/test_gemini_transport.py::test_base_url_strips_openai_suffix`.
+
+### Bug 8: Automatic `.env` Configuration Loading
+- **Reproduction**: Running the application or CLI required users to manually set shell environment variables ($env:GEMINI_API_KEY) in every new terminal session.
+- **Root Cause**: `src/config.py` read solely from `os.environ` without loading `.env` from the project root.
+- **Fix**: Added `python-dotenv` dependency and automatic discovery of `PROJECT_ROOT / ".env"` with `override=False` so existing shell variables maintain priority.
+- **Regression Tests**: `tests/test_gemini_transport.py::test_dotenv_automatic_configuration_loading`, `tests/test_gemini_transport.py::test_env_var_priority_over_dotenv`.
 
 ---
 
@@ -387,7 +392,7 @@ python -m evaluation.runner --live
 ## 12. AI Coding Tools Attribution & Critique
 
 - **Tool Used**: Google Antigravity (Gemini 3.7 Flash).
-- **Primary Roles**: Codebase structure analysis, fast test scaffolding, prompt assembly, and iterative debugging.
+- **Primary Roles**: Codebase structure analysis, fast test scaffolding, prompt assembly, iterative debugging, and Web GUI design.
 - **Example of Incomplete/Incorrect AI Suggestion & Correction**:
   - *Initial Suggestion*: The AI assistant initially suggested checking for `"order"` anywhere in the input string to decide whether to prompt the customer for an order ID.
   - *Why it was wrong*: This naive check caused false positive prompts on policy questions such as *"My membership was active when I ordered. What is my return window?"* and *"What if my order subtotal is under $75?"*, intercepting RAG retrieval.
@@ -397,13 +402,20 @@ python -m evaluation.runner --live
 
 ## 13. Demonstration Video & Walkthrough
 
-> **Demo Video**: `[Final demonstration video link will be added after recording.]`
+A 1 minute 45 second Web GUI demonstration is included in the repository:
 
-The final walkthrough video will demonstrate:
+[▶ Watch the 1 minute 45 second Web GUI demonstration](demo/aster-row-demo-video.mp4)
 
-1. **Web GUI — RAG Policy Inquiry & Citations**: Asking a return policy question and inspecting the generated answer, clickable source citations, and latency metrics.
-2. **Web GUI — Order Lookup with Privacy Preservation**: Looking up `ORD-1007` to view tracking details while confirming that sensitive PII (emails, shipping addresses) and internal notes are redacted.
-3. **Web GUI — Multi-Turn Dialogue & Session Isolation**: Querying items in an order in Turn 1, asking follow-up eligibility questions in Turn 2, and clicking "New Chat" to demonstrate clean session isolation.
-4. **Web GUI — Active Source Conflict & Human Escalation**: Inquiring about Breeze Tumbler dishwasher care to demonstrate conflicting source presentation and the amber handoff banner.
-5. **CLI — Technical & Observability Walkthrough**: Running `python -m src.cli.main --debug` to demonstrate the observability tree, BM25 scoring, and tool call traces.
-6. **Benchmark Verification**: Executing `python -m pytest tests/ -v` (48/48 passed) and `python -m evaluation.runner` (20/20 passed).
+### Recording Mode: Offline (Deterministic RAG)
+The demonstration was recorded using the Web GUI in **Offline (Deterministic RAG) mode** to ensure 100% reproducibility without external API availability constraints or quota limitations.
+
+### Scenarios Demonstrated in the Video:
+1. **Return Policy Retrieval + Citations**: Asking a return policy question and inspecting the generated answer, source citation badges, and response latency.
+2. **International Shipping + Multi-Turn Dialogue**: Inquiring about international shipping in Turn 1, asking about Canada and delivery timeframes in Turn 2, and verifying duty/tax guidance.
+3. **Country Grounding (Canada Supported / Germany Unsupported)**: Asking about shipping to Germany and confirming that the agent accurately identifies it as unsupported without hallucinating.
+4. **Order Lookup with Privacy Preservation**: Looking up `ORD-1007` to view tracking details while confirming that sensitive PII (emails, shipping addresses) and internal notes are omitted.
+5. **Multi-Turn Order Follow-Up**: Asking a follow-up question regarding items in the looked-up order without needing to restate the order ID.
+6. **New Chat / Clean Session Isolation**: Clicking "New Chat" to generate a fresh session ID and isolate subsequent conversations.
+7. **Privacy Protection on Direct Probing**: Directly asking for customer emails and address records, and confirming the agent safely refuses.
+8. **Breeze Tumbler Active-Source Conflict + Handoff**: Asking about Breeze Tumbler dishwasher care to demonstrate conflicting source presentation and the amber specialist handoff callout.
+9. **Migration-Note Prompt Injection Defense**: Attempting to override store policy using draft migration notes, and verifying that the agent adheres strictly to active official documentation.

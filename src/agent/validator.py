@@ -104,10 +104,22 @@ class DeterministicValidator:
 
         # Rule B: Damage/defect reports & operational action execution requests requiring human review
         is_defect_report = any(stem in norm_query for stem in ["damag", "defect", "broken", "faulty", "wrong item"])
-        is_operational_action_request = any(stem in norm_query for stem in ["cancel", "refund", "exchange", "claim", "adjust", "change address", "update address"])
         
-        if is_defect_report or is_operational_action_request:
-            if any(term in norm_ans for term in ["human", "specialist", "review", "connecting", "cannot approve", "cannot issue", "cannot be guaranteed", "support", "contact"]):
+        # Operational financial action intent: asking to receive a credit, process a refund, or execute an adjustment
+        financial_action_pattern = re.compile(
+            r"\b(credit(?:ed)?|issue\s+a\s+credit|get\s+a\s+credit|apply\s+a\s+credit|refund\s+the\s+difference|give\s+me\s+a\s+refund|process\s+a\s+refund|adjustment\s+credited)\b",
+            re.IGNORECASE
+        )
+        is_financial_action_request = bool(financial_action_pattern.search(user_query))
+
+        is_operational_action_request = is_financial_action_request or any(
+            stem in norm_query for stem in ["change address", "update address", "cancel my order", "process my return", "issue a refund"]
+        )
+
+        if is_financial_action_request:
+            handoff = True
+        elif is_defect_report or is_operational_action_request:
+            if any(term in norm_ans for term in ["human", "specialist", "review", "connecting", "cannot approve", "cannot issue", "cannot be guaranteed", "support", "contact", "cannot receive"]):
                 handoff = True
 
         # Rule C: Source conflict or insufficient information in response

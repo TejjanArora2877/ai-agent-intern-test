@@ -30,11 +30,11 @@ def stem(word: str) -> str:
     w = word.lower()
     if len(w) <= 3:
         return w
+    if w in ("broken", "defective", "defect", "defects", "flawed", "flaw"): return "defect"
+    if w in ("damaged", "damages", "damage"): return "damag"
     if w.endswith("shipping") or w.endswith("shipped") or w.endswith("ships"): return "ship"
     if w.endswith("returns") or w.endswith("returned") or w.endswith("returning"): return "return"
     if w.endswith("orders") or w.endswith("ordered") or w.endswith("ordering"): return "order"
-    if w.endswith("damages") or w.endswith("damaged"): return "damag"
-    if w.endswith("defective") or w.endswith("defects"): return "defect"
     if w.endswith("adjustments") or w.endswith("adjustment"): return "adjust"
     if w.endswith("cancellations") or w.endswith("cancellation"): return "cancel"
     if w.endswith("countries"): return "country"
@@ -267,6 +267,17 @@ class InMemoryBM25Retriever(BaseRetriever):
                 if st in ["return", "ship", "warranti", "damag", "defect", "broken", "cancel", "adjust", "care", "membership"]:
                     if st in title_heading or (st in ["defect", "broken"] and any(w in title_heading for w in ["damage", "defect", "wrong"])):
                         score += 4.0
+
+            # 4. Companion Procedural & Reporting Window Boost
+            # When a query addresses an issue (damaged, defective, broken, flaw, wrong item),
+            # companion sections covering reporting windows, deadlines, and resolutions in that issue domain
+            # must be prioritized alongside exception rules so the customer receives actionable timeframe guidance.
+            is_issue_query = any(stem(w) in {"damag", "defect", "broken", "flaw", "wrong"} for w in query_tokens)
+            if is_issue_query:
+                is_reporting_section = any(term in title_heading for term in ["report", "window", "timeframe", "deadlin", "resolut", "claim", "except"])
+                is_issue_domain = any(term in title_heading for term in ["damag", "defect", "wrong", "item", "warranti"])
+                if is_reporting_section and is_issue_domain:
+                    score += 6.0
 
             scores.append((score, idx))
 

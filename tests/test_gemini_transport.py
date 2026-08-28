@@ -145,3 +145,57 @@ def test_native_gemini_fallback_on_api_error():
 
             assert response.answer.startswith("(Live Gemini LLM unavailable:")
             assert len(response.answer) > 30
+
+
+def test_dotenv_automatic_configuration_loading(tmp_path, monkeypatch):
+    """
+    Regression test proving that configuration is automatically loaded from
+    a .env file without requiring manual shell environment variables.
+    """
+    from src.config import reload_settings, Settings
+
+    # Create temporary .env file
+    temp_env = tmp_path / ".env"
+    temp_env.write_text(
+        "LLM_PROVIDER=gemini\n"
+        "GEMINI_API_KEY=test-dotenv-key-abc-987\n"
+        "GEMINI_MODEL=gemini-3.6-flash\n"
+        "DEBUG_MODE=true\n",
+        encoding="utf-8"
+    )
+
+    # Clear environment variables so they aren't pre-set
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("DEBUG_MODE", raising=False)
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+
+    # Reload settings from temp .env
+    loaded_settings = reload_settings(env_file=temp_env, override=True)
+
+    assert loaded_settings.gemini_api_key == "test-dotenv-key-abc-987"
+    assert loaded_settings.gemini_model == "gemini-3.6-flash"
+    assert loaded_settings.debug_mode is True
+    assert loaded_settings.is_live_llm_enabled is True
+
+
+def test_env_var_priority_over_dotenv(tmp_path, monkeypatch):
+    """
+    Regression test proving that explicit environment variables maintain higher
+    priority than .env file variables (override=False).
+    """
+    from src.config import reload_settings
+
+    # Create temporary .env file with a default model
+    temp_env = tmp_path / ".env"
+    temp_env.write_text(
+        "GEMINI_MODEL=from-dotenv-file\n",
+        encoding="utf-8"
+    )
+
+    # Explicitly set higher-priority environment variable
+    monkeypatch.setenv("GEMINI_MODEL", "from-explicit-env-var")
+
+    # Load with override=False (the default behavior)
+    loaded_settings = reload_settings(env_file=temp_env, override=False)
+
+    assert loaded_settings.gemini_model == "from-explicit-env-var"

@@ -3,9 +3,16 @@
 import os
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = PROJECT_ROOT / ".env"
+
+# Automatically load .env if present from project root without overriding existing environment variables
+if ENV_FILE.exists():
+    load_dotenv(dotenv_path=ENV_FILE, override=False)
+
 KNOWLEDGE_BASE_DIR = PROJECT_ROOT / "knowledge-base"
 DATA_DIR = PROJECT_ROOT / "data"
 ORDERS_FILE = DATA_DIR / "orders.json"
@@ -21,6 +28,16 @@ def _clean_gemini_base_url(url: Optional[str]) -> str:
     if cleaned.endswith("/openai"):
         cleaned = cleaned[:-7].rstrip("/")
     return cleaned or default
+
+
+def reload_settings(env_file: Optional[Path] = None, override: bool = False) -> "Settings":
+    """Reload settings optionally from a specific .env file."""
+    target_env = env_file or ENV_FILE
+    if target_env.exists():
+        load_dotenv(dotenv_path=target_env, override=override)
+    global settings
+    settings = Settings()
+    return settings
 
 
 class Settings(BaseModel):

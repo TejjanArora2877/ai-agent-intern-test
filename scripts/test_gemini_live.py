@@ -45,7 +45,8 @@ def test_live_gemini():
         masked_key = "(NOT SET)"
         print(f"GEMINI_API_KEY:   {masked_key}")
         print("\n[!] GEMINI_API_KEY is not set.")
-        print("To test the live Gemini API, set your API key in your environment:")
+        print("To test the live Gemini API, set GEMINI_API_KEY in your .env file or environment:")
+        print("  In .env:            GEMINI_API_KEY=your-actual-api-key")
         print("  Windows PowerShell: $env:GEMINI_API_KEY = \"your-actual-api-key\"")
         print("  Linux / macOS:      export GEMINI_API_KEY=\"your-actual-api-key\"")
         print("Then re-run: python -m scripts.test_gemini_live\n")
