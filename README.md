@@ -404,18 +404,18 @@ In the latest confirmed live Gemini evaluation run, 19 of 20 benchmark cases pas
 
 ### Web GUI Demonstration
 
-![Aster & Row Support Agent Demo](demo/demo-preview.gif)
+![Aster & Row Support Agent Demo](demo/aster-row_DemoPreview.gif)
 
-A **1 minute 5 second** complete walkthrough of the Aster & Row Web GUI is
-included in the repository.
+A **1 minute 23 second** complete walkthrough of the Aster & Row Web GUI
+is included in the repository.
 
-[▶ Watch the full 1 minute 5 second demonstration](demo/demo-video.mp4)
+[▶ Watch the full 1 minute 23 second demonstration](demo/aster-row_DemoVideo.mp4)
 
 ### Recording Mode: Offline (Deterministic RAG)
 
 The demonstration was recorded using the Web GUI in **Offline
 (Deterministic RAG)** mode to provide a reproducible walkthrough without
-depending on external API availability or Gemini rate limits.
+depending on external API availability.
 
 ### Scenarios Demonstrated in the Video
 
@@ -453,3 +453,7 @@ depending on external API availability or Gemini rate limits.
 9. **Migration-Note Prompt Injection Defense**: Attempting to override the
    current policy using a draft migration note and verifying that
    authoritative policy remains in control.
+
+10. **Automated Verification**: Running the automated regression test suite
+    and deterministic offline evaluation suite, confirming **55/55 tests
+    passed** and **20/20 evaluation cases passed (100%)**.
