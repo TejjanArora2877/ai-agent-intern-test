@@ -402,20 +402,54 @@ In the latest confirmed live Gemini evaluation run, 19 of 20 benchmark cases pas
 
 ## 13. Demonstration Video & Walkthrough
 
-A 1 minute 45 second Web GUI demonstration is included in the repository:
+### Web GUI Demonstration
 
-[▶ Watch the 1 minute 45 second Web GUI demonstration](demo/aster-row-demo-video.mp4)
+![Aster & Row Support Agent Demo](demo/demo-preview.gif)
+
+A **1 minute 5 second** complete walkthrough of the Aster & Row Web GUI is
+included in the repository.
+
+[▶ Watch the full 1 minute 5 second demonstration](demo/demo-video.mp4)
 
 ### Recording Mode: Offline (Deterministic RAG)
-The demonstration was recorded using the Web GUI in **Offline (Deterministic RAG) mode** to ensure 100% reproducibility without external API availability constraints or quota limitations.
 
-### Scenarios Demonstrated in the Video:
-1. **Return Policy Retrieval + Citations**: Asking a return policy question and inspecting the generated answer, source citation badges, and response latency.
-2. **International Shipping + Multi-Turn Dialogue**: Inquiring about international shipping in Turn 1, asking about Canada and delivery timeframes in Turn 2, and verifying duty/tax guidance.
-3. **Country Grounding (Canada Supported / Germany Unsupported)**: Asking about shipping to Germany and confirming that the agent accurately identifies it as unsupported without hallucinating.
-4. **Order Lookup with Privacy Preservation**: Looking up `ORD-1007` to view tracking details while confirming that sensitive PII (emails, shipping addresses) and internal notes are omitted.
-5. **Multi-Turn Order Follow-Up**: Asking a follow-up question regarding items in the looked-up order without needing to restate the order ID.
-6. **New Chat / Clean Session Isolation**: Clicking "New Chat" to generate a fresh session ID and isolate subsequent conversations.
-7. **Privacy Protection on Direct Probing**: Directly asking for customer emails and address records, and confirming the agent safely refuses.
-8. **Breeze Tumbler Active-Source Conflict + Handoff**: Asking about Breeze Tumbler dishwasher care to demonstrate conflicting source presentation and the amber specialist handoff callout.
-9. **Migration-Note Prompt Injection Defense**: Attempting to override store policy using draft migration notes, and verifying that the agent adheres strictly to active official documentation.
+The demonstration was recorded using the Web GUI in **Offline
+(Deterministic RAG)** mode to provide a reproducible walkthrough without
+depending on external API availability or Gemini rate limits.
+
+### Scenarios Demonstrated in the Video
+
+1. **Return Policy Retrieval + Citations**: Asking a return-policy question
+   and inspecting the grounded answer, source citation badges, and debug
+   observability trace.
+
+2. **International Shipping + Multi-Turn Dialogue**: Asking whether Aster &
+   Row ships internationally, following up about Canada and delivery time,
+   and verifying duty/tax guidance.
+
+3. **Country Grounding (Canada Supported / Germany Unsupported)**:
+   Asking about shipping to Germany and verifying that the agent identifies
+   the unsupported destination without hallucinating.
+
+4. **Order Lookup with Privacy Preservation**: Looking up `ORD-1007` to view
+   tracking information while confirming that sensitive customer PII and
+   internal notes are not exposed.
+
+5. **Multi-Turn Order Follow-Up**: Asking a follow-up question about the
+   looked-up order without repeating the order ID.
+
+6. **New Chat / Session Isolation**: Using **New Chat** to create a fresh
+   session and prevent previous conversation state from carrying over.
+
+7. **Privacy Protection on Direct Probing**: Asking for customer email,
+   address, and internal risk information and verifying that the agent
+   safely refuses disclosure and recommends specialist assistance.
+
+8. **Breeze Tumbler Active-Source Conflict + Handoff**: Asking about
+   dishwasher care and demonstrating conflicting official sources, source
+   citations, conservative guidance, and the human-specialist handoff
+   indicator.
+
+9. **Migration-Note Prompt Injection Defense**: Attempting to override the
+   current policy using a draft migration note and verifying that
+   authoritative policy remains in control.
